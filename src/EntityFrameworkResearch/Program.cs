@@ -4,6 +4,8 @@ using System.Data.Entity;
 using System.Data.Entity.Core;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
 using ConsoleTableExt;
 using FluentAssertions;
 using MethodTimer;
@@ -11,7 +13,7 @@ using NestedNavigationProperties.DbContext.Ef6;
 using NestedNavigationProperties.Models.Ef6;
 using Type = NestedNavigationProperties.Models.Ef6.Type;
 
-namespace NestedNavigationProperties
+namespace Ef6Research
 {
     
 
@@ -20,14 +22,25 @@ namespace NestedNavigationProperties
         public string TestName { get; set; }
         public string ElapsedTime { get; set; }
         public string Remarks { get; set; }
+        public string MemoryUsage { get; set; } 
         public string Result { get; set; }
     }
+    
+    
 
     public class Program
     {
+        [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
+        private static extern long StrFormatByteSizeW(long qdw, [MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszBuf,
+            int cchBuf);
+        
         [STAThread]
         static void Main(string[] args)
         {
+            long MemorySizeBefore;
+            long MemorySizeAfter;
+            var memoryStringBuilder = new StringBuilder(32);
+            
             Console.Write("Collecting verification data from database...");
             CollectTestData();
             Console.WriteLine("done.");
@@ -54,34 +67,76 @@ namespace NestedNavigationProperties
             List<TestResult> results = new List<TestResult>();
             var stopwatch = new Stopwatch();
 
+            GC.Collect(); GC.WaitForPendingFinalizers();
+            using (var proc = Process.GetCurrentProcess())
+            {
+                proc.Refresh();
+                MemorySizeBefore = proc.PrivateMemorySize64;
+            }
+            
             stopwatch.Start();
             TestSingleCollectionProperty();
             stopwatch.Stop();
+            
+            using (var proc = Process.GetCurrentProcess())
+            {
+                proc.Refresh();
+                MemorySizeAfter = proc.PrivateMemorySize64;
+                    
+                var number = Convert.ToInt64(MemorySizeAfter - MemorySizeBefore);
+                StrFormatByteSizeW(number, memoryStringBuilder, memoryStringBuilder.Capacity);
+                    
+            }
 
             results.Add(new TestResult
             {
                 TestName = "TestSingleCollectionProperty()",
                 Remarks = "This is only a timing reference. See method documentation for details.",
-                ElapsedTime = stopwatch.Elapsed.ToString()
+                ElapsedTime = stopwatch.Elapsed.ToString(),
+                MemoryUsage = memoryStringBuilder.ToString()
             });
+            
+            
+
+            
+
 
             for (var i = 0; i < 32; i++)
             {
+                GC.Collect(); GC.WaitForPendingFinalizers();
+                
+                using (var proc = Process.GetCurrentProcess())
+                {
+                    proc.Refresh();
+                    MemorySizeBefore = proc.PrivateMemorySize64;
+                }
                 var flags = (IndividualDbSetLoadFlags) i;
 
                 Console.WriteLine($"Testing TestUsingIndividualDbSetLoad() with flags {flags}");
                 var result = TestUsingIndividualDbSetLoad(flags);
+                
+                
+                using (var proc = Process.GetCurrentProcess())
+                {
+                    proc.Refresh();
+                    MemorySizeAfter = proc.PrivateMemorySize64;
+                    
+                    var number = Convert.ToInt64(MemorySizeAfter - MemorySizeBefore);
+                    StrFormatByteSizeW(number, memoryStringBuilder, memoryStringBuilder.Capacity);
+                    
+                }
 
                 results.Add(new TestResult
                 {
                     TestName = "TestUsingIndividualDbSetLoad()",
                     Remarks = "Flags: " + flags,
                     ElapsedTime = result.timing,
-                    Result = result.status
+                    Result = result.status,
+                    MemoryUsage = memoryStringBuilder.ToString()
                 });
             }
 
-            ConsoleTableBuilder.From(results).WithFormat(ConsoleTableBuilderFormat.Minimal).ExportAndWriteLine();
+            ConsoleTableBuilder.From(results).WithFormat(ConsoleTableBuilderFormat.MarkDown).ExportAndWriteLine();
            
         }
 
@@ -96,8 +151,9 @@ namespace NestedNavigationProperties
             using (var context = new ApplicationDatabaseContext())
             {
                 context.Plugins
+                    .Include("Presets")
                     .Include("Presets.Modes")
-                    .AsNoTracking().ToList();
+                    .Load();
             }
         }
         
@@ -131,20 +187,6 @@ namespace NestedNavigationProperties
             }
         }
         
-        /// <summary>
-        /// This is tries to load multiple navigation properties using mapped properties/.Include() of a parent navigation
-        /// property. Right now in EF6, this will fail using SQlite as the sql generator does not support APPLY joins
-        /// </summary>
-        private static void TestUsingIncludefooProperties()
-        {
-            using (var context = new ApplicationDatabaseContext())
-            {
-                context.Plugins
-                    .Include(p => p.Presets.Select(pr => pr.Modes))
-                    .AsNoTracking().ToList();
-            }
-        }
-
         private static Dictionary<string, int> countTestData = new Dictionary<string, int>();
         private static Dictionary<int, int> pluginPresetCounts = new Dictionary<int, int>();
         private static Dictionary<string, int> presetModeCounts = new Dictionary<string, int>();
