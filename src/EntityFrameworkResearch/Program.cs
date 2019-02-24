@@ -15,32 +15,29 @@ using Type = NestedNavigationProperties.Models.Ef6.Type;
 
 namespace Ef6Research
 {
-    
-
     public class TestResult
     {
         public string TestName { get; set; }
         public string ElapsedTime { get; set; }
         public string Remarks { get; set; }
-        public string MemoryUsage { get; set; } 
+        public string MemoryUsage { get; set; }
         public string Result { get; set; }
     }
-    
-    
+
 
     public class Program
     {
         [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
         private static extern long StrFormatByteSizeW(long qdw, [MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszBuf,
             int cchBuf);
-        
+
         [STAThread]
         static void Main(string[] args)
         {
             long MemorySizeBefore;
             long MemorySizeAfter;
             var memoryStringBuilder = new StringBuilder(32);
-            
+
             Console.Write("Collecting verification data from database...");
             CollectTestData();
             Console.WriteLine("done.");
@@ -51,7 +48,8 @@ namespace Ef6Research
             }
             catch (EntityCommandCompilationException e)
             {
-                Console.WriteLine($"Got expected EntityCommandCompilationException {e.Message} with innerException {e.InnerException.GetType()}: {e.InnerException.Message}");
+                Console.WriteLine(
+                    $"Got expected EntityCommandCompilationException {e.Message} with innerException {e.InnerException.GetType()}: {e.InnerException.Message}");
             }
 
             try
@@ -60,32 +58,33 @@ namespace Ef6Research
             }
             catch (EntityCommandCompilationException e)
             {
-                Console.WriteLine($"Got expected EntityCommandCompilationException {e.Message} with innerException {e.InnerException.GetType()}: {e.InnerException.Message}");
+                Console.WriteLine(
+                    $"Got expected EntityCommandCompilationException {e.Message} with innerException {e.InnerException.GetType()}: {e.InnerException.Message}");
             }
 
 
             List<TestResult> results = new List<TestResult>();
             var stopwatch = new Stopwatch();
 
-            GC.Collect(); GC.WaitForPendingFinalizers();
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
             using (var proc = Process.GetCurrentProcess())
             {
                 proc.Refresh();
                 MemorySizeBefore = proc.PrivateMemorySize64;
             }
-            
+
             stopwatch.Start();
             TestSingleCollectionProperty();
             stopwatch.Stop();
-            
+
             using (var proc = Process.GetCurrentProcess())
             {
                 proc.Refresh();
                 MemorySizeAfter = proc.PrivateMemorySize64;
-                    
+
                 var number = Convert.ToInt64(MemorySizeAfter - MemorySizeBefore);
                 StrFormatByteSizeW(number, memoryStringBuilder, memoryStringBuilder.Capacity);
-                    
             }
 
             results.Add(new TestResult
@@ -95,35 +94,32 @@ namespace Ef6Research
                 ElapsedTime = stopwatch.Elapsed.ToString(),
                 MemoryUsage = memoryStringBuilder.ToString()
             });
-            
-            
-
-            
 
 
             for (var i = 0; i < 32; i++)
             {
-                GC.Collect(); GC.WaitForPendingFinalizers();
-                
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+
                 using (var proc = Process.GetCurrentProcess())
                 {
                     proc.Refresh();
                     MemorySizeBefore = proc.PrivateMemorySize64;
                 }
+
                 var flags = (IndividualDbSetLoadFlags) i;
 
                 Console.WriteLine($"Testing TestUsingIndividualDbSetLoad() with flags {flags}");
                 var result = TestUsingIndividualDbSetLoad(flags);
-                
-                
+
+
                 using (var proc = Process.GetCurrentProcess())
                 {
                     proc.Refresh();
                     MemorySizeAfter = proc.PrivateMemorySize64;
-                    
+
                     var number = Convert.ToInt64(MemorySizeAfter - MemorySizeBefore);
                     StrFormatByteSizeW(number, memoryStringBuilder, memoryStringBuilder.Capacity);
-                    
                 }
 
                 results.Add(new TestResult
@@ -137,7 +133,6 @@ namespace Ef6Research
             }
 
             ConsoleTableBuilder.From(results).WithFormat(ConsoleTableBuilderFormat.MarkDown).ExportAndWriteLine();
-           
         }
 
         /// <summary>
@@ -156,7 +151,7 @@ namespace Ef6Research
                     .Load();
             }
         }
-        
+
         /// <summary>
         /// This is tries to load multiple navigation properties using a string .Include() of a parent navigation
         /// property. Right now in EF6, this will fail using SQlite as the sql generator does not support APPLY joins
@@ -165,9 +160,9 @@ namespace Ef6Research
         {
             using (var context = new ApplicationDatabaseContext())
             {
-            context.Plugins
-                .Include("Presets.Modes")
-                .Include("Presets.Types")
+                context.Plugins
+                    .Include("Presets.Modes")
+                    .Include("Presets.Types")
                     .AsNoTracking().ToList();
             }
         }
@@ -186,7 +181,7 @@ namespace Ef6Research
                     .AsNoTracking().ToList();
             }
         }
-        
+
         private static Dictionary<string, int> countTestData = new Dictionary<string, int>();
         private static Dictionary<int, int> pluginPresetCounts = new Dictionary<int, int>();
         private static Dictionary<string, int> presetModeCounts = new Dictionary<string, int>();
@@ -263,7 +258,8 @@ namespace Ef6Research
                 context.Configuration.LazyLoadingEnabled = flags.HasFlag(IndividualDbSetLoadFlags.LazyLoadingEnabled);
                 context.Configuration.UseDatabaseNullSemantics =
                     flags.HasFlag(IndividualDbSetLoadFlags.UseDatabaseNullSemantics);
-                context.Configuration.ProxyCreationEnabled = flags.HasFlag(IndividualDbSetLoadFlags.ProxyCreationEnabled);
+                context.Configuration.ProxyCreationEnabled =
+                    flags.HasFlag(IndividualDbSetLoadFlags.ProxyCreationEnabled);
 
                 if (flags.HasFlag(IndividualDbSetLoadFlags.UseLocal))
                 {

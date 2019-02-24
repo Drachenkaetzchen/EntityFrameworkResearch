@@ -5,11 +5,10 @@ using SQLite.CodeFirst;
 
 namespace NestedNavigationProperties.DbContext.Ef6
 {
-     public class ApplicationDatabaseContext : System.Data.Entity.DbContext
+    public class ApplicationDatabaseContext : System.Data.Entity.DbContext
     {
         public ApplicationDatabaseContext() : base(new SQLiteConnection(GetConnectionString()), true)
         {
-          
         }
 
         public static string GetConnectionString()
@@ -28,7 +27,7 @@ namespace NestedNavigationProperties.DbContext.Ef6
         {
             var sqliteConnectionInitializer =
                 new SqliteCreateDatabaseIfNotExists<ApplicationDatabaseContext>(modelBuilder);
-            
+
             modelBuilder.Entity<Plugin>().HasMany(p => p.DefaultModes).WithMany(q => q.Plugins).Map(mc =>
                 mc.MapLeftKey("PluginId").MapRightKey("ModeId").ToTable("PluginModes"));
 
